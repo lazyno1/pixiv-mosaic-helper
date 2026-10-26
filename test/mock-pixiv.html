@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock pixiv 投稿页</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; padding: 28px; background: #f6f7fb; color: #1c2030; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p { font-size: 13px; color: #5b6377; margin: 0 0 18px; }
+  .up {
+    display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px;
+    border: 1.5px dashed #8f9ab5; border-radius: 12px; background: #fff;
+    font-size: 14px; cursor: pointer;
+  }
+  .up:hover { border-color: #4b6bff; }
+  .up input { display: none; }
+  #dropzone {
+    margin-top: 16px; width: 360px; padding: 26px; text-align: center;
+    border: 1.5px dashed #c3c9d9; border-radius: 12px; color: #7b8398; font-size: 13px;
+    background: #fff;
+  }
+  #log { margin-top: 20px; font-size: 12px; color: #3a4155; }
+  #log pre { background: #fff; border: 1px solid #e1e5f0; border-radius: 10px; padding: 12px; overflow: auto; max-height: 420px; }
+  .files { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .files figure { margin: 0; background: #fff; border: 1px solid #e1e5f0; border-radius: 10px; padding: 8px; text-align: center; }
+  .files img { max-width: 140px; max-height: 140px; display: block; border-radius: 6px; }
+  .files figcaption { font-size: 11px; color: #5b6377; margin-top: 5px; max-width: 140px; word-break: break-all; }
+</style>
+</head>
+<body>
+  <h1>Mock pixiv 投稿页</h1>
+  <p>用于测试 Pixiv 打码助手：拦截选择 / 拖拽、涂抹打码、回填投稿框。</p>
+
+  <label class="up">选择图片（模拟 pixiv 投稿按钮）
+    <input id="picker" type="file" accept="image/*" multiple>
+  </label>
+
+  <div id="dropzone">拖拽图片到这里（mock 投稿拖拽区）</div>
+
+  <div id="log">
+    <div class="files" id="files"></div>
+    <pre id="dump">尚无投稿文件</pre>
+  </div>
+
+<script>
+(() => {
+  'use strict';
+  const picker = document.getElementById('picker');
+  const filesEl = document.getElementById('files');
+  const dumpEl = document.getElementById('dump');
+  const IMG_W = 320;
+  const IMG_H = 240;
+
+  window.__log = { changes: [], analyses: [], errors: [] };
+
+  function note(msg) {
+    window.__log.errors.push(String(msg));
+  }
+
+  async function analyze(file) {
+    const bmp = await createImageBitmap(file);
+    const c = document.createElement('canvas');
+    c.width = bmp.width;
+    c.height = bmp.height;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(bmp, 0, 0);
+    const d = ctx.getImageData(0, 0, c.width, c.height).data;
+
+    const uniqIn = (x0, y0, x1, y1) => {
+      const set = new Set();
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * c.width + x) * 4;
+          set.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+        }
+      }
+      return set.size;
+    };
+    const flatIn = (x0, y0, x1, y1) => {
+      let same = 0;
+      let total = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1 - 1; x++) {
+          const i = (y * c.width + x) * 4;
+          const j = i + 4;
+          total += 1;
+          if (d[i] === d[j] && d[i + 1] === d[j + 1] && d[i + 2] === d[j + 2]) same += 1;
+        }
+      }
+      return total ? same / total : 0;
+    };
+
+    const rx = c.width / IMG_W;
+    const ry = c.height / IMG_H;
+    return {
+      width: c.width,
+      height: c.height,
+      painted: uniqIn(Math.round(120 * rx), Math.round(115 * ry), Math.round(200 * rx), Math.round(125 * ry)),
+      paintedFlat: Math.round(flatIn(Math.round(120 * rx), Math.round(115 * ry), Math.round(200 * rx), Math.round(125 * ry)) * 1000) / 1000,
+      plain: uniqIn(Math.round(10 * rx), Math.round(10 * ry), Math.round(60 * rx), Math.round(50 * ry)),
+      plainFlat: Math.round(flatIn(Math.round(10 * rx), Math.round(10 * ry), Math.round(60 * rx), Math.round(50 * ry)) * 1000) / 1000,
+    };
+  }
+
+  async function render() {
+    const files = Array.from(picker.files || []);
+    filesEl.textContent = '';
+    for (const f of files) {
+      const fig = document.createElement('figure');
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      const cap = document.createElement('figcaption');
+      cap.textContent = f.name + ' · ' + f.size + 'B';
+      fig.appendChild(img);
+      fig.appendChild(cap);
+      filesEl.appendChild(fig);
+    }
+    dumpEl.textContent = JSON.stringify({
+      changes: window.__log.changes,
+      analyses: window.__log.analyses,
+      errors: window.__log.errors,
+    }, null, 2);
+  }
+
+  picker.addEventListener('change', async () => {
+    const files = Array.from(picker.files || []);
+    window.__log.changes.push(files.map((f) => ({ name: f.name, size: f.size, type: f.type })));
+    window.__log.analyses = [];
+    await render();
+    for (const f of files) {
+      try {
+        window.__log.analyses.push(await analyze(f));
+      } catch (err) {
+        note(err && err.message ? err.message : err);
+      }
+    }
+    await render();
+  });
+
+  // ---- 测试辅助 ----
+  window.__pick = async (seeds) => {
+    const dt = new DataTransfer();
+    for (const seed of seeds) {
+      const blob = await fetch('/test.png?seed=' + seed).then((r) => r.blob());
+      dt.items.add(new File([blob], 'photo-' + seed + '.png', { type: 'image/png' }));
+    }
+    picker.files = dt.files;
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    return picker.files.length;
+  };
+
+  window.__drop = async (seed) => {
+    const blob = await fetch('/test.png?seed=' + seed).then((r) => r.blob());
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], 'dropped-' + seed + '.png', { type: 'image/png' }));
+    document.body.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    return dt.files.length;
+  };
+
+  window.__state = () => {
+    const host = document.getElementById('pixiv-mosaic-host');
+    const sr = host && host.shadowRoot;
+    const ed = sr && sr.querySelector('.pxm-editor');
+    const fileEl = sr && sr.querySelector('.pxm-file');
+    const brushEl = sr && sr.querySelector('.pxm-editor .pxm-brush');
+    const blockEl = sr && sr.querySelector('.pxm-editor .pxm-block');
+    const applyEl = sr && sr.querySelector('.pxm-editor .pxm-apply');
+    const fab = sr && sr.querySelector('.pxm-fab');
+    return {
+      host: !!host,
+      editorOpen: !!(ed && ed.classList.contains('pxm-open')),
+      applyDisabled: !!(applyEl && applyEl.disabled),
+      editorFile: fileEl ? fileEl.textContent : '',
+      brush: brushEl ? brushEl.value : null,
+      block: blockEl ? blockEl.value : null,
+      panelOpen: !!(sr && sr.querySelector('.pxm-panel.pxm-open')),
+      fabHidden: !!(fab && fab.hidden),
+      inputFiles: Array.from(picker.files || []).map((f) => f.name),
+      changes: window.__log.changes.length,
+      analyses: window.__log.analyses,
+      errors: window.__log.errors,
+    };
+  };
+
+  window.__paint = (iy) => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    const cv = sr.querySelector('.pxm-preview');
+    const r = cv.getBoundingClientRect();
+    const y = iy || 120;
+    const pt = (ix) => [r.left + (ix / IMG_W) * r.width, r.top + (y / IMG_H) * r.height];
+    const send = (type, cx, cy, buttons) => cv.dispatchEvent(new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      clientX: cx,
+      clientY: cy,
+      pointerId: 11,
+      pointerType: 'mouse',
+      isPrimary: true,
+      button: 0,
+      buttons: buttons,
+    }));
+    let p = pt(80);
+    send('pointerdown', p[0], p[1], 1);
+    for (let i = 1; i <= 16; i++) {
+      p = pt(80 + (160 * i) / 16);
+      send('pointermove', p[0], p[1], 1);
+    }
+    p = pt(240);
+    send('pointerup', p[0], p[1], 0);
+    return { width: r.width, height: r.height };
+  };
+
+  window.__pickBig = async (w, h) => {
+    const blob = await fetch('/big.png?w=' + (w || 4300) + '&h=' + (h || 3100)).then((r) => r.blob());
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], 'big.png', { type: 'image/png' }));
+    picker.files = dt.files;
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    return picker.files.length;
+  };
+
+  window.__paintMid = () => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    const cv = sr.querySelector('.pxm-preview');
+    const r = cv.getBoundingClientRect();
+    const pt = (fx) => [r.left + fx * r.width, r.top + 0.5 * r.height];
+    const send = (type, cx, cy, buttons) => cv.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, clientX: cx, clientY: cy,
+      pointerId: 11, pointerType: 'mouse', isPrimary: true, button: 0, buttons: buttons,
+    }));
+    let p = pt(0.35);
+    send('pointerdown', p[0], p[1], 1);
+    for (let i = 1; i <= 16; i++) {
+      p = pt(0.35 + (0.3 * i) / 16);
+      send('pointermove', p[0], p[1], 1);
+    }
+    p = pt(0.65);
+    send('pointerup', p[0], p[1], 0);
+    return { width: r.width, height: r.height };
+  };
+
+  window.__setEditorRange = (brush, block) => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    const set = (sel, v) => {
+      const el = sr.querySelector(sel);
+      el.value = String(v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    if (brush != null) set('.pxm-editor .pxm-brush', brush);
+    if (block != null) set('.pxm-editor .pxm-block', block);
+    return window.__state();
+  };
+
+  window.__setPanelRange = (brush, block) => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    const set = (sel, v) => {
+      const el = sr.querySelector(sel);
+      el.value = String(v);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    if (brush != null) set('.pxm-panel .pxm-brush', brush);
+    if (block != null) set('.pxm-panel .pxm-block', block);
+    return {
+      brush: sr.querySelector('.pxm-panel .pxm-brush').value,
+      block: sr.querySelector('.pxm-panel .pxm-block').value,
+      brushOut: sr.querySelector('.pxm-panel .pxm-brush-out').textContent,
+      blockOut: sr.querySelector('.pxm-panel .pxm-block-out').textContent,
+    };
+  };
+
+  window.__apply = () => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    sr.querySelector('.pxm-editor .pxm-apply').click();
+    return true;
+  };
+
+  window.__clickPanel = () => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    sr.querySelector('.pxm-fab').click();
+    return true;
+  };
+
+  window.__escape = () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    return true;
+  };
+
+  window.__toast = () => {
+    const sr = document.getElementById('pixiv-mosaic-host').shadowRoot;
+    const t = sr.querySelector('.pxm-editor .pxm-toast');
+    return t && !t.hidden ? t.textContent : '';
+  };
+})();
+</script>
+</body>
+</html>

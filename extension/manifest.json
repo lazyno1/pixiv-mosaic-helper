@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Pixiv 打码助手",
+  "short_name": "Pixiv 打码助手",
+  "version": "1.0.0",
+  "description": "在 pixiv 投稿页选择或拖入图片，先用马赛克涂抹打码，再一键填入投稿框上传。全部在本地处理。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.pixiv.net/*", "https://*.pixiv.net/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Pixiv 打码助手（点击打开 / 收起面板）",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.pixiv.net/*", "https://*.pixiv.net/*"],
+      "js": ["content/styles.js", "content/editor.js", "content/content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

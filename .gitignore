@@ -25,3 +25,6 @@ desktop.ini
 # 日志
 *.log
 npm-debug.log*
+
+# 本机专用的推送辅助脚本（含本机代理端口探测，不属于项目内容）
+fix-push.ps1

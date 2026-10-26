@@ -1,5 +1,10 @@
 # Pixiv 打码助手 · Pixiv Mosaic Helper
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0-ff5d9e.svg)](https://github.com/lazyno1/pixiv-mosaic-helper/releases/latest)
+[![Edge](https://img.shields.io/badge/Edge-Manifest%20V3-0078D4?logo=microsoftedge&logoColor=white)](https://github.com/lazyno1/pixiv-mosaic-helper)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-2ea44f.svg)](https://github.com/lazyno1/pixiv-mosaic-helper)
+
 给 pixiv 投稿图片加马赛克的浏览器扩展：选择或拖入图片后先进入打码编辑器，涂好马赛克再一键填回投稿框，继续正常投稿即可。
 
 A Manifest V3 extension for Edge / Chrome that intercepts image uploads on pixiv, lets you paint mosaic over the areas you want to hide, and injects the processed file back into the upload form. Everything runs locally in the browser — no image ever leaves your machine.
@@ -23,6 +28,10 @@ A Manifest V3 extension for Edge / Chrome that intercepts image uploads on pixiv
 ![右下角面板](docs/screenshots/panel-open.png)
 
 ## 安装
+
+### 直接下载（推荐）
+
+到 [Releases](https://github.com/lazyno1/pixiv-mosaic-helper/releases/latest) 下载 `pixiv-mosaic-helper.zip`，解压后按下面的开发者模式步骤加载其中的 `extension/` 文件夹。
 
 ### Edge / Chrome（开发者模式）
 
